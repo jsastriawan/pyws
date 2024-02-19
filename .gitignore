@@ -1,6 +1,10 @@
 # Shell script to set local environment
 setenv*.sh
 setenv*.cmd
+# temporary public key/cert for testing
+*.crt
+*.cer
+*.pem
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

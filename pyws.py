@@ -4,8 +4,10 @@ import re
 from requests.auth import HTTPDigestAuth
 import uuid
 from lxml import etree
-import collections
 from collections import OrderedDict,abc
+import urllib3, requests
+from urllib3.util.ssl_ import create_urllib3_context
+from requests.adapters import HTTPAdapter
 
 import requests
 
@@ -31,7 +33,10 @@ class WsmanMessage:
 
     def _getFullUrl(self, obj):
         pfx = obj[:3]
-        return self._ns_prefix[pfx]+obj
+        try:
+            return self._ns_prefix[pfx]+obj
+        except KeyError:
+            return ""
     
     def Get(self, obj, id, selector=None):
         msg = copy.deepcopy(self._envelope)
@@ -268,7 +273,8 @@ class WsmanMessage:
         doc = etree.ElementTree(msg)
         return etree.tostring(doc, pretty_print=True, xml_declaration=True, encoding="utf-8").decode()
 
-    def parseNumber(self,value):
+    @staticmethod
+    def parseNumber(value):
         try:
             fl_val = float(re.sub('[^.\-\d]', '', value))
             int_val = int(value) 
@@ -278,21 +284,23 @@ class WsmanMessage:
                 return fl_val
         except ValueError:
             return value
-        
-    def realobject(self, s):
+    
+    @staticmethod    
+    def realobject(s):
         if s !=None and  s.strip()!="":
             if s.strip().lower()=="true":
                 return True
             elif s.strip().lower()=="false":
                 return False
             else:
-                return self.parseNumber(s)
+                return WsmanMessage.parseNumber(s)
         else:
             if s == None:
                 return None
             return ""
 
-    def elementToMap(self,el):
+    @staticmethod
+    def elementToMap(el):
         od = OrderedDict()
         tag = etree.QName(el.tag).localname
         if len(el.getchildren())>0:            
@@ -306,31 +314,32 @@ class WsmanMessage:
                     if c.text!=None:
                         t = c.text.strip()
                         if t!="":
-                            od[ctag].append(self.realobject(c.text))
+                            od[ctag].append(WsmanMessage.realobject(c.text))
                         else:
-                            od[ctag].append(self.elementToMap(c))
+                            od[ctag].append(WsmanMessage.elementToMap(c))
                     else:
                         if len(c.getchildren())>0:
-                            od[ctag].append(self.elementToMap(c))
+                            od[ctag].append(WsmanMessage.elementToMap(c))
                         else:
                             od[ctag].append(None)
                 else:                    
                     if c.text!=None:
                         t = c.text.strip()
                         if t!="":
-                            od[ctag]=self.realobject(c.text)
+                            od[ctag]=WsmanMessage.realobject(c.text)
                         else:
-                            od[ctag]=self.elementToMap(c)
+                            od[ctag]=WsmanMessage.elementToMap(c)
                     else:
                         if len(c.getchildren())>0:
-                            od[ctag]=self.elementToMap(c)
+                            od[ctag]=WsmanMessage.elementToMap(c)
                         else:
                             od[ctag]=None
         else:
             od[tag] = el.text
         return od
 
-    def xmlToSimpleMap(self,xml):
+    @staticmethod
+    def xmlToSimpleMap(xml):
         od = OrderedDict()
         doc = etree.fromstring(xml)
         if doc==None:
@@ -339,21 +348,38 @@ class WsmanMessage:
         od[tag]=OrderedDict()
         for c in doc:
             ctag = etree.QName(c.tag).localname
-            od[tag][ctag]= self.elementToMap(c)
+            od[tag][ctag]= WsmanMessage.elementToMap(c)
         return od
+
+
+class CustomSslContextHttpAdapter(HTTPAdapter):
+        """"Transport adapter" that allows us to use a custom ssl context object with the requests."""
+        def init_poolmanager(self, connections, maxsize, block=False):
+            ctx = create_urllib3_context()
+            ctx.load_default_certs()
+            ctx.options |= 0x4  # ssl.OP_LEGACY_SERVER_CONNECT
+            self.poolmanager = urllib3.PoolManager(ssl_context=ctx)
 
 class WsmanClient:
     session = None
     message = None
     url = ""
 
-    def __init__(self, host, username="admin",password="",tls=False, insecure=True, endpoint="/wsman") -> None:
+    def __init__(self, host, username="admin",password="",tls=False, insecure=True, cert=None, endpoint="/wsman") -> None:
         self.session = requests.Session()
         self.session.auth = HTTPDigestAuth(username,password)
         if tls==False:
             self.url= "http://"+host+":16992"+endpoint
         else:
             self.url = "https://"+host+":16993"+endpoint
+            self.session.mount(self.url,CustomSslContextHttpAdapter())
+            if cert==None:
+                self.session.verify= (not insecure)
+                urllib3.disable_warnings()
+            else:
+                self.session.cert=cert
+                self.session.verify=cert
+
         self.message = WsmanMessage()        
 
     def Get(self, wsobj, selector=None):
@@ -362,7 +388,7 @@ class WsmanClient:
         resp = self.session.post(self.url,data=msg)
         doc = etree.fromstring(resp.content)
         xmlresp=etree.tostring(doc,pretty_print=True).decode()
-        obj = self.message.xmlToSimpleMap(xmlresp)
+        obj = WsmanMessage.xmlToSimpleMap(xmlresp)
         try:
             od = obj["Envelope"]["Body"]
         except KeyError:
@@ -376,7 +402,7 @@ class WsmanClient:
         resp = self.session.post(self.url,data=msg)
         doc = etree.fromstring(resp.content)
         xmlresp=etree.tostring(doc,pretty_print=True).decode()
-        obj = self.message.xmlToSimpleMap(xmlresp)
+        obj = WsmanMessage.xmlToSimpleMap(xmlresp)
         ctx = None
         try:
             ctx=obj["Envelope"]["Body"]["EnumerateResponse"]["EnumerationContext"]        
@@ -390,7 +416,7 @@ class WsmanClient:
             resp = self.session.post(self.url,data=msg) 
             doc = etree.fromstring(resp.content)
             xmlresp=etree.tostring(doc,pretty_print=True).decode()
-            obj = self.message.xmlToSimpleMap(xmlresp)
+            obj = WsmanMessage.xmlToSimpleMap(xmlresp)
             #print(json.dumps(obj,indent=3))
             try:
                 temp1 = obj["Envelope"]["Body"]["PullResponse"]["Items"]
@@ -420,4 +446,33 @@ class WsmanClient:
             except KeyError:
                 pass
 
+        return items
+
+    def BulkPull(self, obj_arr):
+        items = OrderedDict()
+
+        if obj_arr==None or isinstance(obj_arr,list)==False:
+            return items
+        
+        for wsobj in obj_arr:
+            
+            if isinstance(wsobj, str)==False:
+                continue
+            
+            if wsobj.endswith("[]"):
+                obj = wsobj.strip("[]")
+                temp = self.EnumPull(obj)
+                try:
+                    items[obj]= temp[obj]
+                except KeyError:
+                    print("Unable to pull "+obj)
+                    pass
+            else:
+                temp = self.Get(wsobj)
+                try:
+                    items[wsobj]= temp[wsobj]
+                except KeyError:
+                    print("Unable to get "+obj)
+                    pass
+        
         return items
