@@ -12,6 +12,7 @@ import requests
 class WsmanMessage:
     _envelope = None
     _actionGet = "http://schemas.xmlsoap.org/ws/2004/09/transfer/Get"
+    _actionPut = "http://schemas.xmlsoap.org/ws/2004/09/transfer/Put"
     _actionDelete = "http://schemas.xmlsoap.org/ws/2004/09/transfer/Delete"
     _actionEnumerate = "http://schemas.xmlsoap.org/ws/2004/09/enumeration/Enumerate"
     _actionPull = "http://schemas.xmlsoap.org/ws/2004/09/enumeration/Pull"
@@ -69,9 +70,122 @@ class WsmanMessage:
         
         return etree.tostring(doc, pretty_print=True, xml_declaration=True, encoding="utf-8").decode()
     
-    def Enum(self, obj, id, selector=None):
-        msg = copy.deepcopy(self._envelope)
+    def Put(self, obj, id, data, selector=None):
+        nsmap = self._envelope.nsmap
+        uri = self._getFullUrl(obj)
+        nsmap["r"]= uri
+        msg = etree.Element("Envelope",nsmap=nsmap,xmlns="http://www.w3.org/2003/05/soap-envelope")
+
+        header = etree.Element("Header")
+        # add action header
+        action = etree.Element(etree.QName("http://schemas.xmlsoap.org/ws/2004/08/addressing","Action"))
+        action.attrib["mustUnderstand"]="true"
+        action.text = self._actionPut
+        header.append(action)
+        dest = etree.Element(etree.QName("http://schemas.xmlsoap.org/ws/2004/08/addressing","To"))
+        dest.text = "/wsman"
+        header.append(dest)
+        resuri = etree.Element(etree.QName("http://schemas.dmtf.org/wbem/wsman/1/wsman.xsd","ResourceURI"))
+        resuri.text = self._getFullUrl(obj)
+        header.append(resuri)
+        mesgid = etree.Element(etree.QName("http://schemas.xmlsoap.org/ws/2004/08/addressing","MessageID"))
+        mesgid.text = str(id)
+        header.append(mesgid)
+        replyto = etree.Element(etree.QName("http://schemas.xmlsoap.org/ws/2004/08/addressing","ReplyTo"))
+        address = etree.Element(etree.QName("http://schemas.xmlsoap.org/ws/2004/08/addressing","Address"))
+        address.text = "http://schemas.xmlsoap.org/ws/2004/08/addressing/role/anonymous"
+        replyto.append(address)
+        header.append(replyto)
+        optimeout = etree.Element(etree.QName("http://schemas.dmtf.org/wbem/wsman/1/wsman.xsd","OperationTimeout"))
+        optimeout.text = "PT60S"
+        header.append(optimeout)
+        if selector!=None:
+            header.append(selector)
+        body = etree.Element("Body")
         
+        msg.append(header)
+        # convert data to XML
+        putobj = etree.Element(etree.QName(uri,obj))
+        for k in data[obj]:
+            el = etree.Element(etree.QName(uri,k))
+            # assuming simple scalar value
+            if data[obj][k]!=None:
+                if isinstance(data[obj][k], bool):
+                    # make sure it is 'true' or 'false'
+                    el.text=str(data[obj][k]).lower()
+                elif type(data[obj][k]) is type(etree.Element("a")):
+                    # if we have an etree.Element type, just append it. 
+                    # It may have its own custom namespace representing a complex entity
+                    el.append(data[obj][k])
+                else:
+                    el.text=str(data[obj][k])
+            putobj.append(el)
+
+        body.append(putobj)
+        msg.append(body)
+        
+        doc = etree.ElementTree(msg)
+        return etree.tostring(doc, pretty_print=True, xml_declaration=True, encoding="utf-8").decode()
+
+    def Exec(self, obj, method, id, input, selector=None):
+        nsmap = self._envelope.nsmap
+        uri = self._getFullUrl(obj)
+        nsmap["r"]= uri
+        msg = etree.Element("Envelope",nsmap=nsmap,xmlns="http://www.w3.org/2003/05/soap-envelope")
+
+        header = etree.Element("Header")
+        # add action header
+        action = etree.Element(etree.QName("http://schemas.xmlsoap.org/ws/2004/08/addressing","Action"))
+        action.attrib["mustUnderstand"]="true"
+        action.text = uri + "/" + method
+        header.append(action)
+        dest = etree.Element(etree.QName("http://schemas.xmlsoap.org/ws/2004/08/addressing","To"))
+        dest.text = "/wsman"
+        header.append(dest)
+        resuri = etree.Element(etree.QName("http://schemas.dmtf.org/wbem/wsman/1/wsman.xsd","ResourceURI"))
+        resuri.text = self._getFullUrl(obj)
+        header.append(resuri)
+        mesgid = etree.Element(etree.QName("http://schemas.xmlsoap.org/ws/2004/08/addressing","MessageID"))
+        mesgid.text = str(id)
+        header.append(mesgid)
+        replyto = etree.Element(etree.QName("http://schemas.xmlsoap.org/ws/2004/08/addressing","ReplyTo"))
+        address = etree.Element(etree.QName("http://schemas.xmlsoap.org/ws/2004/08/addressing","Address"))
+        address.text = "http://schemas.xmlsoap.org/ws/2004/08/addressing/role/anonymous"
+        replyto.append(address)
+        header.append(replyto)
+        optimeout = etree.Element(etree.QName("http://schemas.dmtf.org/wbem/wsman/1/wsman.xsd","OperationTimeout"))
+        optimeout.text = "PT60S"
+        header.append(optimeout)
+        if selector!=None:
+            header.append(selector)
+        body = etree.Element("Body")
+        
+        msg.append(header)
+        # convert data to XML
+        inputobj = etree.Element(etree.QName(uri,method+"_INPUT"))
+        if input!=None:
+            for k in input:
+                el = etree.Element(etree.QName(uri,k))
+                # assuming simple scalar value
+                if input[k]!=None:
+                    if isinstance(input[k], bool):
+                        # make sure it is 'true' or 'false'
+                        el.text=str(input[k]).lower()
+                    else:
+                        el.text=str(input[k])
+                inputobj.append(el)
+
+        body.append(inputobj)
+        msg.append(body)
+        
+        doc = etree.ElementTree(msg)
+        return etree.tostring(doc, pretty_print=True, xml_declaration=True, encoding="utf-8").decode()
+
+    def Enum(self, obj, id, selector=None):
+        nsmap = self._envelope.nsmap
+        nsmap["n"]="http://schemas.xmlsoap.org/ws/2004/09/enumeration"
+        msg = etree.Element("Envelope",nsmap=nsmap,xmlns="http://www.w3.org/2003/05/soap-envelope")
+
         header = etree.Element("Header")
         # add action header
         action = etree.Element(etree.QName("http://schemas.xmlsoap.org/ws/2004/08/addressing","Action"))
@@ -108,8 +222,10 @@ class WsmanMessage:
         return etree.tostring(doc, pretty_print=True, xml_declaration=True, encoding="utf-8").decode()
     
     def Pull(self, obj, id, enumctx="0",selector=None):
-        msg = copy.deepcopy(self._envelope)
-        
+        nsmap = self._envelope.nsmap
+        nsmap["n"]="http://schemas.xmlsoap.org/ws/2004/09/enumeration"
+        msg = etree.Element("Envelope",nsmap=nsmap,xmlns="http://www.w3.org/2003/05/soap-envelope")
+
         header = etree.Element("Header")
         # add action header
         action = etree.Element(etree.QName("http://schemas.xmlsoap.org/ws/2004/08/addressing","Action"))
@@ -138,10 +254,10 @@ class WsmanMessage:
         
         
         body = etree.Element("Body")
-        pull = etree.Element("Pull",xmlns="http://schemas.xmlsoap.org/ws/2004/09/enumeration")
-        ec = etree.Element("EnumerationContext")
+        pull = etree.Element(etree.QName("http://schemas.xmlsoap.org/ws/2004/09/enumeration","Pull"))
+        ec = etree.Element(etree.QName("http://schemas.xmlsoap.org/ws/2004/09/enumeration","EnumerationContext"))
         ec.text = enumctx
-        me = etree.Element("MaxElements")
+        me = etree.Element(etree.QName("http://schemas.xmlsoap.org/ws/2004/09/enumeration","MaxElements"))
         me.text = "999"
         pull.append(ec)
         pull.append(me)
@@ -172,6 +288,8 @@ class WsmanMessage:
             else:
                 return self.parseNumber(s)
         else:
+            if s == None:
+                return None
             return ""
 
     def elementToMap(self,el):
@@ -181,11 +299,21 @@ class WsmanMessage:
             for c in el:
                 ctag = etree.QName(c.tag).localname
                 if od.get(ctag)!=None:
-                    if isinstance(od[ctag],list):
-                        od[ctag].append(self.elementToMap(c))
-                    else:
+                    if isinstance(od[ctag],list)==False:
                         t = od[ctag]
                         od[ctag] = [t]
+                    
+                    if c.text!=None:
+                        t = c.text.strip()
+                        if t!="":
+                            od[ctag].append(self.realobject(c.text))
+                        else:
+                            od[ctag].append(self.elementToMap(c))
+                    else:
+                        if len(c.getchildren())>0:
+                            od[ctag].append(self.elementToMap(c))
+                        else:
+                            od[ctag].append(None)
                 else:                    
                     if c.text!=None:
                         t = c.text.strip()
@@ -197,7 +325,7 @@ class WsmanMessage:
                         if len(c.getchildren())>0:
                             od[ctag]=self.elementToMap(c)
                         else:
-                            od[ctag]=""
+                            od[ctag]=None
         else:
             od[tag] = el.text
         return od
