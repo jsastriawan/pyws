@@ -1,6 +1,7 @@
 import copy
-import json
+import hashlib
 import re
+import ssl
 from requests.auth import HTTPDigestAuth
 import uuid
 from lxml import etree
@@ -8,6 +9,7 @@ from collections import OrderedDict,abc
 import urllib3, requests
 from urllib3.util.ssl_ import create_urllib3_context
 from requests.adapters import HTTPAdapter
+import pem
 
 import requests
 
@@ -353,18 +355,41 @@ class WsmanMessage:
 
 
 class CustomSslContextHttpAdapter(HTTPAdapter):
+        fingerprint = None
+        def __init__(self, fingerprint=None, **kwargs):
+            self.fingerprint = fingerprint
+
+            super().__init__(**kwargs)
+
         """"Transport adapter" that allows us to use a custom ssl context object with the requests."""
         def init_poolmanager(self, connections, maxsize, block=False):
             ctx = create_urllib3_context()
             ctx.load_default_certs()
             ctx.options |= 0x4  # ssl.OP_LEGACY_SERVER_CONNECT
-            self.poolmanager = urllib3.PoolManager(ssl_context=ctx)
+            if self.fingerprint!=None:            
+                self.poolmanager = urllib3.PoolManager(ssl_context=ctx, assert_fingerprint=self.fingerprint)
+            else :
+                self.poolmanager = urllib3.PoolManager(ssl_context=ctx)
 
 class WsmanClient:
     session = None
     message = None
     url = ""
+    cert=None
 
+    def getFingerprint(self):
+        try:
+            if self.cert==None:
+                return None
+            obj = pem.parse_file(self.cert)
+            dc = ssl.PEM_cert_to_DER_cert(obj[0])
+            sh = hashlib.sha1().update(dc).digest()
+            fp = sh.hexdigest()
+            return fp
+        except:
+            pass
+        return None
+    
     def __init__(self, host, username="admin",password="",tls=False, insecure=True, cert=None, endpoint="/wsman") -> None:
         self.session = requests.Session()
         self.session.auth = HTTPDigestAuth(username,password)
@@ -372,13 +397,14 @@ class WsmanClient:
             self.url= "http://"+host+":16992"+endpoint
         else:
             self.url = "https://"+host+":16993"+endpoint
-            self.session.mount(self.url,CustomSslContextHttpAdapter())
-            if cert==None:
-                self.session.verify= (not insecure)
-                urllib3.disable_warnings()
-            else:
-                self.session.cert=cert
-                self.session.verify=cert
+            self.cert = cert
+            fingerprint = self.getFingerprint()
+            adapter = CustomSslContextHttpAdapter(fingerprint=fingerprint)
+            self.session.mount(self.url,adapter=adapter)
+            self.session.verify= (not insecure)
+            urllib3.disable_warnings()
+            if insecure!=True:
+                self.session.verify = cert
 
         self.message = WsmanMessage()        
 

@@ -22,6 +22,7 @@ if __name__ == '__main__':
     if password == None:
         print("Please set AMT_PASSWORD env")
         exit()
-    cl = pyws.WsmanClient(host=hostname,username=user,password=password, tls=True, insecure=True)
+    cert_path = os.path.join(os.path.dirname(os.path.realpath(__file__)),"test.pem")
+    cl = pyws.WsmanClient(host=hostname,username=user,password=password, tls=True, cert=cert_path)
     res = cl.Get(wsobj)
     print(json.dumps(res,indent=3))
