@@ -63,13 +63,13 @@ def shuffle_socket_to_ws(con1: socket.socket, con2: ClientConnection):
 if __name__=="__main__":
     parser = argparse.ArgumentParser(
         prog="amtkvm.py",
-        description="Intel AMT KVM vncviewer"
+        description="Intel AMT KVM vncviewer launcher"
     )
     parser.add_argument(
         'host',help="AMT Hostname"
     )
     parser.add_argument(
-        '-u','--user',help="Use TLS",default="admin"
+        '-u','--user',help="AMT Username",default="admin"
     )
     parser.add_argument(
         '-s','--tls',help="Use TLS", action="store_true"
@@ -78,7 +78,7 @@ if __name__=="__main__":
         '-k','--insecure',help="Skip Verify TLS", action="store_true"
     )
     parser.add_argument(
-        '-p','--password',help="Password",default=""
+        '-p','--password',help="AMT Password",default=""
     )
 
     args = parser.parse_args()
@@ -118,8 +118,14 @@ if __name__=="__main__":
     auth_url = "http://"+host+":"+str(port)+"/index.htm"
     if args.tls:
         auth_url = "https://"+host+":"+str(port)+"/index.htm"
-    resp = session.get(auth_url)
-    next_header = session.auth.build_digest_header("GET","/ws-redirection")
+    next_header=""
+    try:
+        resp = session.get(auth_url)
+        next_header = session.auth.build_digest_header("GET","/ws-redirection")
+    except Exception as e:
+        client_socket.close()
+        print(e)
+        exit(-1)
     
     #print(next_header)
     # Establish websocket to /ws-redirection
@@ -135,16 +141,23 @@ if __name__=="__main__":
         cipher_string ="TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256:TLS_AES_128_GCM_SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:DHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-CHACHA20-POLY1305:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-SHA384:ECDHE-RSA-AES256-SHA384:DHE-RSA-AES256-SHA256:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA256:DHE-RSA-AES128-SHA256:ECDHE-ECDSA-AES256-SHA:ECDHE-RSA-AES256-SHA:DHE-RSA-AES256-SHA:ECDHE-ECDSA-AES128-SHA:ECDHE-RSA-AES128-SHA:DHE-RSA-AES128-SHA:AES256-GCM-SHA384:AES128-GCM-SHA256:AES256-SHA256:AES128-SHA256:AES256-SHA:AES128-SHA"
         ciphers = ssl_context.set_ciphers(cipher_string)        
 
-    websocket = ws_connect(uri=url,additional_headers={"Authorization": next_header}, ssl_context=ssl_context)
-    # the following transaction is not checked, just formality 
-    websocket.send(bytearray(kvm))
-    incoming = websocket.recv()
-    websocket.send(bytearray(empty_kerb))
-    incoming = websocket.recv()
-    websocket.send(bytearray(direct))
-    incoming = websocket.recv()
-    # send any attached RFB mesage sent with the direct 8 bytes response
-    client_socket.sendall(incoming[8:])
+    ws_connect:ClientConnection 
+    try:
+        websocket = ws_connect(uri=url,additional_headers={"Authorization": next_header}, ssl_context=ssl_context)
+        # the following transaction is not checked, just formality 
+        websocket.send(bytearray(kvm))
+        incoming = websocket.recv()
+        websocket.send(bytearray(empty_kerb))
+        incoming = websocket.recv()
+        websocket.send(bytearray(direct))
+        incoming = websocket.recv()
+        # send any attached RFB mesage sent with the direct 8 bytes response
+        client_socket.sendall(incoming[8:])
+
+    except Exception as e:
+        print(e)
+        exit(-1)
+
     try:
         th1 = threading.Thread(target=shuffle_socket_to_ws, args=(client_socket,websocket))
         th1.start()
