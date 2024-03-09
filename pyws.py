@@ -14,7 +14,6 @@ import pem
 import requests
 
 class WsmanMessage:
-    _envelope = None
     _actionGet = "http://schemas.xmlsoap.org/ws/2004/09/transfer/Get"
     _actionPut = "http://schemas.xmlsoap.org/ws/2004/09/transfer/Put"
     _actionDelete = "http://schemas.xmlsoap.org/ws/2004/09/transfer/Delete"
@@ -25,12 +24,12 @@ class WsmanMessage:
         "CIM": "http://schemas.dmtf.org/wbem/wscim/1/cim-schema/2/",
         "IPS": "http://intel.com/wbem/wscim/1/ips-schema/1/",
         }
+    _nsmap = {}
 
     def __init__(self, mode="AMT"):
-        self._envelope = etree.Element("Envelope",nsmap={"xsd":"http://www.w3.org/2001/XMLSchema",
-                                                         "a":"http://schemas.xmlsoap.org/ws/2004/08/addressing", 
-                                                         "w":"http://schemas.dmtf.org/wbem/wsman/1/wsman.xsd"},
-                                                         xmlns="http://www.w3.org/2003/05/soap-envelope")        
+        self._nsmap={"xsd":"http://www.w3.org/2001/XMLSchema",
+                     "a":"http://schemas.xmlsoap.org/ws/2004/08/addressing", 
+                     "w":"http://schemas.dmtf.org/wbem/wsman/1/wsman.xsd"}
     
 
     def _getFullUrl(self, obj):
@@ -41,7 +40,7 @@ class WsmanMessage:
             return ""
     
     def Get(self, obj, id, selector=None):
-        msg = copy.deepcopy(self._envelope)
+        msg = etree.Element("Envelope",nsmap=self._nsmap,xmlns="http://www.w3.org/2003/05/soap-envelope")
         
         header = etree.Element("Header")
         # add action header
@@ -78,7 +77,7 @@ class WsmanMessage:
         return etree.tostring(doc, pretty_print=True, xml_declaration=True, encoding="utf-8").decode()
     
     def Put(self, obj, id, data, selector=None):
-        nsmap = self._envelope.nsmap
+        nsmap = self._nsmap
         uri = self._getFullUrl(obj)
         nsmap["r"]= uri
         msg = etree.Element("Envelope",nsmap=nsmap,xmlns="http://www.w3.org/2003/05/soap-envelope")
@@ -135,7 +134,7 @@ class WsmanMessage:
         return etree.tostring(doc, pretty_print=True, xml_declaration=True, encoding="utf-8").decode()
 
     def Exec(self, obj, method, id, input, selector=None):
-        nsmap = self._envelope.nsmap
+        nsmap = self._nsmap
         uri = self._getFullUrl(obj)
         nsmap["r"]= uri
         msg = etree.Element("Envelope",nsmap=nsmap,xmlns="http://www.w3.org/2003/05/soap-envelope")
@@ -189,7 +188,7 @@ class WsmanMessage:
         return etree.tostring(doc, pretty_print=True, xml_declaration=True, encoding="utf-8").decode()
 
     def Enum(self, obj, id, selector=None):
-        nsmap = self._envelope.nsmap
+        nsmap = self._nsmap
         nsmap["n"]="http://schemas.xmlsoap.org/ws/2004/09/enumeration"
         msg = etree.Element("Envelope",nsmap=nsmap,xmlns="http://www.w3.org/2003/05/soap-envelope")
 
@@ -229,7 +228,7 @@ class WsmanMessage:
         return etree.tostring(doc, pretty_print=True, xml_declaration=True, encoding="utf-8").decode()
     
     def Pull(self, obj, id, enumctx="0",selector=None):
-        nsmap = self._envelope.nsmap
+        nsmap = self._nsmap
         nsmap["n"]="http://schemas.xmlsoap.org/ws/2004/09/enumeration"
         msg = etree.Element("Envelope",nsmap=nsmap,xmlns="http://www.w3.org/2003/05/soap-envelope")
 
