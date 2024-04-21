@@ -2,9 +2,16 @@
 
 A simple Python WSMAN library using lxml and some AMT commandline utilities.
 
+## Installing dependencies
+
+```
+pip install -f requirements.txt
+```
+
 ## AMT KVM VNCViewer launcher
 
-This utility will start VNC server at a random TCP port, delay executes VNC client to connect to the specified random port, establish authenticated websocket redirection session to AMT system upon accepting VNC client connection, and then shuffles the packet between websocket and VNC connection.
+This utility will start VNC server at a random TCP port, delay executes VNC client to connect to the specified random port, establish authenticated websocket redirection session to AMT system upon accepting VNC client connection, and then shuffles the packet between websocket and VNC connection. Default implementation uses Tiger VNC Viewer on Linux, see the code for using this script with Real VNC Viewer. Additionally, adjust the path of "vncviewer" for Windows.
+
 
 ```mermaid
 sequenceDiagram
@@ -26,7 +33,7 @@ sequenceDiagram
 
 ## AMT SOL PuTTY launcher
 
-This utility will start Telnet server at a random TCP port, delay executes PuTTY client to connect to the specified random port, establish authenticated websocket redirection session to AMT system upon accepting VNC client connection, and then shuffles the packet between websocket and Telnet connection.
+This utility will start Telnet server at a random TCP port, delay executes PuTTY client to connect to the specified random port, establish authenticated websocket redirection session to AMT system upon accepting Telnet client connection, and then shuffles the packet between websocket and Telnet connection. Adjust "putty" path for Windows appropriately for using this script on Windows.
 
 ```mermaid
 sequenceDiagram

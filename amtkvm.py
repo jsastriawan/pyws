@@ -13,9 +13,15 @@ import threading
 kvm=[0x10, 0x01, 0x00, 0x00, 0x4b, 0x56, 0x4d, 0x52]
 empty_kerb = [0x13, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00]
 direct = [0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+# Note: use fullpath for Windows i.e. c:\\Program Files...
 # Tiger VNC Viewer support
 vncviewer="vncviewer"
-vnc_opts="-PreferredEncoding=ZRLE -LowColorLevel=2 -NoJPEG -AutoSelect=0 -FullColor=0"        
+vnc_opts="-PreferredEncoding=ZRLE -LowColorLevel=2 -NoJPEG -AutoSelect=0 -FullColor=0"
+# Real VNC Vewer support
+# Assuming realvncviewer binary is saved as rvncviewer
+# Uncomment below, set at "pal8" 256 color only, only change to "full" for lower screen resolution, otherwise AMT will refuse to serve.
+#vncviewer="rvncviewer"
+#vnc_opts="-WarnUnencrypted=FALSE -PreferredEncoding=ZRLE -Quality=CUSTOM -ColorLevel=pal8"
 
 def start_vncviewer(addr: str):
     time.sleep(1)
