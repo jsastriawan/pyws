@@ -277,7 +277,7 @@ class WsmanMessage:
     @staticmethod
     def parseNumber(value):
         try:
-            fl_val = float(re.sub('[^.\-\d]', '', value))
+            fl_val = float(re.sub('[+-]?[0-9]+\\.[0-9]+', '', value))
             int_val = int(value) 
             if str(int_val)  == value:
                 return int_val
@@ -363,6 +363,7 @@ class CustomSslContextHttpAdapter(HTTPAdapter):
         """"Transport adapter" that allows us to use a custom ssl context object with the requests."""
         def init_poolmanager(self, connections, maxsize, block=False):
             ctx = create_urllib3_context()
+            ctx.check_hostname = False
             ctx.load_default_certs()
             ctx.options |= 0x4  # ssl.OP_LEGACY_SERVER_CONNECT
             if self.fingerprint!=None:            
