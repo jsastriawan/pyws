@@ -14,6 +14,7 @@ import pem
 import requests
 
 class WsmanMessage:
+    _identify = "http://schemas.dmtf.org/wbem/wsman/identity/1/wsmanidentity.xsd"
     _actionGet = "http://schemas.xmlsoap.org/ws/2004/09/transfer/Get"
     _actionPut = "http://schemas.xmlsoap.org/ws/2004/09/transfer/Put"
     _actionDelete = "http://schemas.xmlsoap.org/ws/2004/09/transfer/Delete"
@@ -39,6 +40,22 @@ class WsmanMessage:
         except KeyError:
             return ""
     
+    def Identify(self):
+        nsmap = self._nsmap
+        nsmap["wsmid"] = self._identify
+
+        msg = etree.Element("Envelope",nsmap=self._nsmap,xmlns="http://www.w3.org/2003/05/soap-envelope")
+        header = etree.Element("Header")
+        wsmid = etree.Element(etree.QName("http://schemas.dmtf.org/wbem/wsman/identity/1/wsmanidentity.xsd","Identify"))
+        body = etree.Element("Body")
+        body.append(wsmid)
+        msg.append(header)
+        msg.append(body)
+
+        doc = etree.ElementTree(msg)
+        
+        return etree.tostring(doc, pretty_print=True, xml_declaration=True, encoding="utf-8").decode()
+
     def Get(self, obj, id, selector=None):
         msg = etree.Element("Envelope",nsmap=self._nsmap,xmlns="http://www.w3.org/2003/05/soap-envelope")
         
@@ -336,7 +353,8 @@ class WsmanMessage:
                         else:
                             od[ctag]=None
         else:
-            od[tag] = el.text
+            if el.text!=None:
+                od[tag] = el.text                
         return od
 
     @staticmethod
